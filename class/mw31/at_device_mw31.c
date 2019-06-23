@@ -195,17 +195,17 @@ static int mw31_netdev_set_down(struct netdev *netdev)
     return RT_EOK;
 }
 
-static int mw31_netdev_set_addr_info(struct netdev *netdev, ip_addr_t *ip_addr, ip_addr_t *netmask, ip_addr_t *gw)
-{
 #define IPADDR_RESP_SIZE       128
 #define IPADDR_SIZE            16
+char mw31_ip_addr[IPADDR_SIZE] = {0};
+char mw31_gw_addr[IPADDR_SIZE] = {0};
+char mw31_netmask_addr[IPADDR_SIZE] = {0};
 
+static int mw31_netdev_set_addr_info(struct netdev *netdev, ip_addr_t *ip_addr, ip_addr_t *netmask, ip_addr_t *gw)
+{
     int result = RT_EOK;
     at_response_t resp = RT_NULL;
     struct at_device *device = RT_NULL;
-    char mw31_ip_addr[IPADDR_SIZE] = {0};
-    char mw31_gw_addr[IPADDR_SIZE] = {0};
-    char mw31_netmask_addr[IPADDR_SIZE] = {0};
 
     RT_ASSERT(netdev);
     RT_ASSERT(ip_addr || netmask || gw);
@@ -241,9 +241,9 @@ static int mw31_netdev_set_addr_info(struct netdev *netdev, ip_addr_t *ip_addr, 
     else
         rt_memcpy(mw31_netmask_addr, inet_ntoa(netdev->netmask), IPADDR_SIZE);
 
-    /* send addr info set commond "AT+CIPSTA_CUR=<ip>[,<gateway>,<netmask>]" and wait response */
-    if (at_obj_exec_cmd(device->client, resp, "AT+CIPSTA_CUR=\"%s\",\"%s\",\"%s\"",
-                        mw31_ip_addr, mw31_gw_addr, mw31_netmask_addr) < 0)
+    /* send addr info set commond "AT+WJAPIP=<ip>,<network>,<gateway>[,<dns>] " and wait response */
+    if (at_obj_exec_cmd(device->client, resp, "AT+WJAPIP=%s,%s,%s",
+                        mw31_ip_addr, mw31_netmask_addr, mw31_gw_addr) < 0)
     {
         LOG_E("mw31 device(%s) set address information failed.", device->name);
         result = -RT_ERROR;
@@ -297,8 +297,9 @@ static int mw31_netdev_set_dns_server(struct netdev *netdev, uint8_t dns_num, ip
         return -RT_ENOMEM;
     }
 
-    /* send dns server set commond "AT+CIPDNS_CUR=<enable>[,<DNS    server0>,<DNS   server1>]" and wait response */
-    if (at_obj_exec_cmd(device->client, resp, "AT+CIPDNS_CUR=1,\"%s\"", inet_ntoa(*dns_server)) < 0)
+    /* send dns server set commond "AT+WJAPIP=<ip>,<network>,<gateway>[,<dns>] " and wait response */
+    if (at_obj_exec_cmd(device->client, resp, "AT+WJAPIP=%s,%s,%s,%s",
+                        mw31_ip_addr, mw31_netmask_addr, mw31_gw_addr, inet_ntoa(*dns_server)) < 0)
     {
         LOG_E("mw31 device(%s) set DNS server(%s) failed.", device->name, inet_ntoa(*dns_server));
         result = -RT_ERROR;
@@ -325,6 +326,7 @@ static int mw31_netdev_set_dhcp(struct netdev *netdev, rt_bool_t is_enabled)
     int result = RT_EOK;
     at_response_t resp = RT_NULL;
     struct at_device *device = RT_NULL;
+    const char *send_buf;
 
     RT_ASSERT(netdev);
 
@@ -342,8 +344,16 @@ static int mw31_netdev_set_dhcp(struct netdev *netdev, rt_bool_t is_enabled)
         return -RT_ENOMEM;
     }
 
-    /* send dhcp set commond "AT+CWDHCP_CUR=<mode>,<en>" and wait response */
-    if (at_obj_exec_cmd(device->client, resp, "AT+CWDHCP_CUR=%d,%d", MW31_STATION, is_enabled) < 0)
+    if (is_enabled)
+    {
+        send_buf = "AT+WDHCP=ON";
+    }
+    else
+    {
+        send_buf = "AT+WDHCP=OFF";
+    }
+    /* send dhcp set commond "AT+WDHCP=" and wait response */
+    if (at_obj_exec_cmd(device->client, resp, send_buf) < 0)
     {
         LOG_E("mw31 device(%s) set DHCP status(%d) failed.", device->name, is_enabled);
         result = -RT_ERROR;
